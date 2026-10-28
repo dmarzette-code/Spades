@@ -1,0 +1,41 @@
+name: Spades
+options:
+  bundleIdPrefix: com.dmarzette
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  SpadesEngine:
+    path: .
+targets:
+  Spades:
+    type: application
+    platform: iOS
+    sources:
+      - App/Spades
+    dependencies:
+      - package: SpadesEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.dmarzette.spades
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
+        INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+        INFOPLIST_KEY_CFBundleDisplayName: Spades
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.card-games
+schemes:
+  Spades:
+    build:
+      targets:
+        Spades: all
+    test:
+      targets:
+        - package: SpadesEngine/SpadesEngineTests
