@@ -46,13 +46,26 @@ All of these can be changed on the **House Rules** screen:
 
 Presets: Standard, Quick (250), Jokers & Big Deuce, No Mercy.
 
-## The AI plays fair
+## Opponents
 
-The AI never sees other players' cards. Each bot gets a `PlayerView` with only its own hand and what has been played or bid at the table. It counts cards, tracks who is void in which suit, covers its partner's nil, tries to set opponents' nils, and avoids bags once its bid is made. In simulation the AI makes about 96% of its bids.
+Pick **Easy**, **Medium**, or **Hard** on the home screen. Your partner always plays at full strength.
+
+| Level | How it plays |
+| --- | --- |
+| Easy | Doesn't remember played cards, bids loosely, and makes the occasional careless play. |
+| Medium | Card-counting heuristic: tracks voids, covers partner's nil, sets yours, ducks bags. |
+| Hard | Before every bid and card it imagines many possible deals of the unseen cards, plays each option to the end of the hand, and picks the best average. |
+
+No AI ever sees hidden cards. Every bot works from a `PlayerView` with only its own hand and what's public at the table, and Hard's imagined deals are built from that alone.
+
+Measured on identical, seat-swapped deals: Medium beats Easy in about 88% of games, and Hard beats Medium's best tuning in about 78% (+14 points per hand). Re-run the measurements with:
+
+```sh
+SPADES_TUNE=1 SPADES_GAMES=30 swift test -c release -Xswiftc -enable-testing --filter AIStrengthTests
+```
 
 ## Roadmap ideas
 
-- Tune AI aggressiveness (it bids a bit conservatively right now)
 - Card-passing for nil / blind nil variants
 - Stats and hand history
 - Online play with friends (Game Center)
