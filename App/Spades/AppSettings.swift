@@ -8,6 +8,7 @@ import SpadesEngine
 final class AppSettings {
     var rules: HouseRules { didSet { save(rules, "rules") } }
     var pace: Pace { didSet { save(pace, "pace") } }
+    var difficulty: Difficulty { didSet { save(difficulty, "difficulty") } }
     /// Play a card with one tap instead of tap-to-lift, tap-to-play.
     var oneTapPlay: Bool { didSet { UserDefaults.standard.set(oneTapPlay, forKey: "oneTapPlay") } }
     var showBidSuggestion: Bool { didSet { UserDefaults.standard.set(showBidSuggestion, forKey: "showBidSuggestion") } }
@@ -18,6 +19,7 @@ final class AppSettings {
         let d = UserDefaults.standard
         rules = d.data(forKey: "rules").flatMap(HouseRules.decodeLeniently) ?? .standard
         pace = Self.load("pace") ?? .normal
+        difficulty = Self.load("difficulty") ?? .medium
         oneTapPlay = d.bool(forKey: "oneTapPlay")
         showBidSuggestion = d.object(forKey: "showBidSuggestion") as? Bool ?? true
         gamesWon = d.integer(forKey: "gamesWon")

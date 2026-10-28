@@ -16,6 +16,8 @@ struct HomeView: View {
                 hero
                 Spacer()
                 rulesSummary
+                DifficultyPicker()
+                    .padding(.horizontal, 32)
                 VStack(spacing: 12) {
                     Button("Deal Me In") { playing = true }
                         .buttonStyle(BrassButtonStyle())
@@ -83,6 +85,46 @@ struct HomeView: View {
         }
         .padding(.horizontal, 28)
         .onTapGesture { showingRules = true }
+    }
+}
+
+/// Three-way opponent strength selector styled to match the table.
+struct DifficultyPicker: View {
+    @Environment(AppSettings.self) private var settings
+    @Namespace private var pill
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(Difficulty.allCases) { level in
+                    let active = settings.difficulty == level
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { settings.difficulty = level }
+                    } label: {
+                        Text(level.label)
+                            .font(Theme.label(14, weight: .bold))
+                            .foregroundStyle(active ? Theme.ink : Theme.mist)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background {
+                                if active {
+                                    Capsule().fill(Theme.brass).matchedGeometryEffect(id: "pill", in: pill)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+            .background(Capsule().fill(Theme.panel))
+            .overlay(Capsule().strokeBorder(Theme.hairline))
+            Text(settings.difficulty.blurb)
+                .font(Theme.display(13, weight: .regular).italic())
+                .foregroundStyle(Theme.mist)
+                .multilineTextAlignment(.center)
+                .contentTransition(.opacity)
+                .frame(minHeight: 34, alignment: .top)
+        }
+        .sensoryFeedback(.selection, trigger: settings.difficulty)
     }
 }
 

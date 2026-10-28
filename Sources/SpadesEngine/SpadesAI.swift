@@ -7,9 +7,88 @@ public protocol SpadesAI: Sendable {
     func choosePlay(_ view: PlayerView) -> Card
 }
 
+public enum Difficulty: String, CaseIterable, Codable, Sendable, Identifiable {
+    case easy, medium, hard
+
+    public var id: String { rawValue }
+    public var label: String { rawValue.capitalized }
+
+    public var blurb: String {
+        switch self {
+        case .easy: "Forgets what's been played and bids loosely."
+        case .medium: "Solid club player. Counts cards, bids honestly."
+        case .hard: "Simulates the rest of the hand before every bid and card."
+        }
+    }
+
+    /// The heuristic part of each level. Hard adds simulation on top (see `makeAI`).
+    public var tuning: AITuning {
+        switch self {
+        case .easy: AITuning(bidBias: -0.3, bidNoise: 1.4, mistakeRate: 0.22, remembersCards: false, setsNils: false)
+        case .medium: AITuning(bidBias: 0, bidNoise: 0.35, mistakeRate: 0.03, remembersCards: true, setsNils: true, tableAwareness: 0.15)
+        case .hard: Self.rolloutTuning
+        }
+    }
+
+    /// The sharpest pure heuristic, found by self-play sweeps. Hard uses it to play out simulations.
+    public static let rolloutTuning = AITuning(bidBias: 0, bidNoise: 0, mistakeRate: 0, remembersCards: true, setsNils: true, tableAwareness: 0.15)
+
+    public func makeAI() -> SpadesAI {
+        self == .hard ? MonteCarloAI() : HeuristicAI(self)
+    }
+}
+
+/// Knobs that separate a casual bot from a sharp one.
+public struct AITuning: Hashable, Sendable {
+    /// Added to the hand's trick estimate before rounding. Positive bids more aggressively.
+    public var bidBias: Double
+    /// Random spread (in tricks) applied to bids.
+    public var bidNoise: Double
+    /// Chance of making a loose, unconsidered play.
+    public var mistakeRate: Double
+    /// Whether the bot tracks played cards and voids.
+    public var remembersCards: Bool
+    /// Whether the bot deliberately tries to break opponents' nils.
+    public var setsNils: Bool
+    /// Extra tricks added when partner already bid a number: partner's bid was already cautious,
+    /// so shading ours too would make the team bid too low.
+    public var partnerBias: Double
+    /// Per unclaimed trick, how much a late bidder leans up when the table's bids leave tricks floating.
+    public var tableAwareness: Double
+
+    public init(bidBias: Double, bidNoise: Double, mistakeRate: Double, remembersCards: Bool, setsNils: Bool,
+                partnerBias: Double = 0, tableAwareness: Double = 0) {
+        self.bidBias = bidBias
+        self.bidNoise = bidNoise
+        self.mistakeRate = mistakeRate
+        self.remembersCards = remembersCards
+        self.setsNils = setsNils
+        self.partnerBias = partnerBias
+        self.tableAwareness = tableAwareness
+    }
+}
+
 /// A card-counting heuristic player. It only knows what a real player at the table would know.
 public struct HeuristicAI: SpadesAI {
-    public init() {}
+    public let tuning: AITuning
+
+    public init(_ difficulty: Difficulty = .hard) { tuning = difficulty.tuning }
+    public init(tuning: AITuning) { self.tuning = tuning }
+
+    /// Repeatable pseudo-randomness derived from what this player can see, so games replay identically.
+    func jitter(_ view: PlayerView, salt: UInt64) -> Double {
+        var h: UInt64 = 0xCBF2_9CE4_8422_2325 ^ salt
+        func mix(_ v: UInt64) { h = (h ^ v) &* 0x0000_0100_0000_01B3 }
+        mix(UInt64(view.seat.rawValue))
+        mix(UInt64(view.completedTricks.count))
+        mix(UInt64(view.currentTrick.plays.count))
+        for c in view.hand { mix(UInt64(c.rank.rawValue * 4 + c.suit.rawValue)) }
+        for t in view.scores.values.sorted(by: { $0.points < $1.points }) { mix(UInt64(bitPattern: Int64(t.points))) }
+        h ^= h >> 33
+        h &*= 0xFF51_AFD7_ED55_8CCD
+        h ^= h >> 33
+        return Double(h >> 11) / Double(1 << 53)
+    }
 
     // MARK: Bidding
 
@@ -83,7 +162,15 @@ public struct HeuristicAI: SpadesAI {
             if estimate < 1.0 { return .nilBid }
         }
 
-        var target = estimate
+        var target = estimate + tuning.bidBias
+        if tuning.bidNoise > 0 { target += (jitter(view, salt: 1) - 0.5) * 2 * tuning.bidNoise }
+        if let pb = partnerBid, !pb.isNil { target += tuning.partnerBias }
+        if view.bids.count >= 2 {
+            // Tricks nobody has claimed yet; late bidders can afford to reach for some of them.
+            let claimed = view.bids.values.reduce(0) { $0 + $1.contractTricks }
+            let floating = Double(13 - claimed) - estimate
+            if floating > 0 { target += floating * tuning.tableAwareness * Double(view.bids.count - 1) / 2 }
+        }
         // Partner of a nil bidder must cover them, so bid a little more conservatively.
         if partnerBid?.isNil == true { target -= 0.3 }
         // Close to the bag limit: lean toward bidding up rather than eating bags.
@@ -104,11 +191,14 @@ public struct HeuristicAI: SpadesAI {
     public func choosePlay(_ view: PlayerView) -> Card {
         let legal = view.legalPlays
         guard legal.count > 1 else { return legal[0] }
-        let ctx = PlayContext(view)
+        if tuning.mistakeRate > 0 && jitter(view, salt: 2) < tuning.mistakeRate {
+            return legal[Int(jitter(view, salt: 3) * Double(legal.count)) % legal.count]
+        }
+        let ctx = PlayContext(view, remembersCards: tuning.remembersCards)
 
         if ctx.iAmLiveNil { return ctx.playAsNil() }
         if ctx.partnerIsLiveNil { return ctx.coverPartner() }
-        if let nilSeat = ctx.liveOpponentNil, !ctx.mustFocusOnContract { return ctx.setNil(nilSeat) }
+        if tuning.setsNils, let nilSeat = ctx.liveOpponentNil, !ctx.mustFocusOnContract { return ctx.setNil(nilSeat) }
         return ctx.wantTricks ? ctx.playToWin() : ctx.playToDuck()
     }
 }
@@ -145,16 +235,18 @@ struct PlayContext {
     let voids: [Seat: Set<Suit>]
     let tricksLeft: Int
 
-    init(_ view: PlayerView) {
+    init(_ view: PlayerView, remembersCards: Bool = true) {
         self.view = view
         rules = view.rules
         me = view.seat
         legal = view.legalPlays
         trick = view.currentTrick
-        let played = view.completedTricks.flatMap { $0.plays.map(\.card) } + view.currentTrick.plays.map(\.card)
+        // A forgetful player only knows the cards on the table right now.
+        let remembered = remembersCards ? view.completedTricks : []
+        let played = remembered.flatMap { $0.plays.map(\.card) } + view.currentTrick.plays.map(\.card)
         knowledge = CardKnowledge(hand: view.hand, played: played, rules: view.rules)
         var v: [Seat: Set<Suit>] = [:]
-        for t in view.completedTricks + [view.currentTrick] {
+        for t in remembered + [view.currentTrick] {
             guard let led = t.ledSuit else { continue }
             for p in t.plays where p.card.suit != led {
                 v[p.seat, default: []].insert(led)

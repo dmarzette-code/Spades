@@ -54,6 +54,7 @@ struct GameView: View {
             startGame()
         }
         .onChange(of: settings.pace) { _, pace in controller.pace = pace }
+        .onChange(of: settings.difficulty) { _, level in controller.difficulty = level }
         .onChange(of: controller.isGameOver) { _, over in
             guard over else { return }
             settings.gamesPlayed += 1
@@ -206,6 +207,7 @@ struct GameView: View {
         selected = nil
         hintCard = nil
         controller.pace = settings.pace
+        controller.difficulty = settings.difficulty
         controller.newGame(rules: settings.rules)
     }
 

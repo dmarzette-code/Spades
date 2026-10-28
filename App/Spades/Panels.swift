@@ -272,6 +272,16 @@ struct GameMenuView: View {
                         .padding(.vertical, 6)
                     }
                 }
+                Section {
+                    Picker("Opponents", selection: $settings.difficulty) {
+                        ForEach(Difficulty.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Opponents")
+                } footer: {
+                    Text(settings.difficulty.blurb + " Takes effect on their next move.")
+                }
                 Section("Table") {
                     Picker("Pace", selection: $settings.pace) {
                         ForEach(Pace.allCases.filter { $0 != .instant }) { Text($0.label).tag($0) }

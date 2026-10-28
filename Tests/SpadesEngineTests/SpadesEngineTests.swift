@@ -291,7 +291,7 @@ final class SimulationTests: XCTestCase {
 @MainActor
 final class ControllerTests: XCTestCase {
     func testControllerRunsUntilHumanActs() async {
-        let c = GameController(rules: .standard, pace: .instant)
+        let c = GameController(rules: .standard, pace: .instant, opponentAI: HeuristicAI(), partnerAI: HeuristicAI())
         var rng = SeededRNG(42)
         c.newGame(rules: .standard, dealer: .north, rng: &rng)
         await c.waitUntilIdle()
@@ -306,7 +306,7 @@ final class ControllerTests: XCTestCase {
     }
 
     func testControllerPlaysWholeRoundWithHints() async {
-        let c = GameController(rules: .standard, pace: .instant)
+        let c = GameController(rules: .standard, pace: .instant, opponentAI: HeuristicAI(), partnerAI: HeuristicAI())
         var rng = SeededRNG(7)
         c.newGame(rules: .standard, dealer: .east, rng: &rng)
         await c.waitUntilIdle()
@@ -327,7 +327,7 @@ final class ControllerTests: XCTestCase {
         var rules = HouseRules()
         rules.blindNilAllowed = true
         rules.blindNilMinDeficit = 0
-        let c = GameController(rules: rules, pace: .instant)
+        let c = GameController(rules: rules, pace: .instant, opponentAI: HeuristicAI(), partnerAI: HeuristicAI())
         var rng = SeededRNG(3)
         c.newGame(rules: rules, dealer: .east, rng: &rng)
         await c.waitUntilIdle()

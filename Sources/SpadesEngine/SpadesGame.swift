@@ -44,6 +44,21 @@ public struct SpadesGame: Sendable {
         self.currentTrick = Trick(leader: dealer.next)
     }
 
+    /// A game rebuilt from one player's knowledge plus guessed hands for everyone else. Used for simulation.
+    init(view: PlayerView, hands: [Seat: [Card]]) {
+        self.init(rules: view.rules, dealer: view.dealer)
+        self.hands = hands
+        scores = view.scores
+        bids = view.bids
+        tricksWon = view.tricksWon
+        currentTrick = view.currentTrick
+        completedTricks = view.completedTricks
+        spadesBroken = view.spadesBroken
+        roundNumber = 1
+        phase = view.bids.count == 4 ? .playing : .bidding
+        turn = view.seat
+    }
+
     // MARK: Dealing
 
     public mutating func startRound<R: RandomNumberGenerator>(using rng: inout R) {

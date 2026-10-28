@@ -48,13 +48,32 @@ public final class GameController {
     public var showingRoundSummary = false
     public private(set) var isBusy = false
 
-    private let ai: SpadesAI
+    /// How strong the opponents are. Your partner always plays at full strength.
+    public var difficulty: Difficulty {
+        didSet { if !opponentsOverridden { opponentAI = difficulty.makeAI() } }
+    }
+
+    private var opponentAI: SpadesAI
+    private let partnerAI: SpadesAI
+    private let advisor: SpadesAI = HeuristicAI(.hard)
+    private let opponentsOverridden: Bool
     private var loop: Task<Void, Never>?
 
-    public init(rules: HouseRules = .standard, pace: Pace = .normal, ai: SpadesAI = HeuristicAI()) {
+    /// - Parameters:
+    ///   - opponentAI: Overrides the difficulty's opponents (useful for tests).
+    ///   - partnerAI: Defaults to the hard AI.
+    public init(rules: HouseRules = .standard, pace: Pace = .normal, difficulty: Difficulty = .medium,
+                opponentAI: SpadesAI? = nil, partnerAI: SpadesAI? = nil) {
         self.game = SpadesGame(rules: rules)
         self.pace = pace
-        self.ai = ai
+        self.difficulty = difficulty
+        self.opponentsOverridden = opponentAI != nil
+        self.opponentAI = opponentAI ?? difficulty.makeAI()
+        self.partnerAI = partnerAI ?? Difficulty.hard.makeAI()
+    }
+
+    private func ai(for seat: Seat) -> SpadesAI {
+        seat.team == human.team ? partnerAI : opponentAI
     }
 
     // MARK: Derived state for the UI
@@ -71,13 +90,13 @@ public final class GameController {
     /// What the AI would bid with your hand.
     public var suggestedBid: Bid? {
         guard isHumanTurnToBid else { return nil }
-        return ai.chooseBid(game.view(for: human))
+        return advisor.chooseBid(game.view(for: human))
     }
 
-    /// What the AI would play from your hand.
+    /// What your partner would play from your hand.
     public var hint: Card? {
         guard isHumanTurnToPlay else { return nil }
-        return ai.choosePlay(game.view(for: human))
+        return partnerAI.choosePlay(game.view(for: human))
     }
 
     // MARK: Commands
@@ -172,6 +191,11 @@ public final class GameController {
         try? await Task.sleep(for: d)
     }
 
+    /// AI decisions run off the main actor so animations stay smooth while the hard AI simulates.
+    private nonisolated func think<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await Task.detached(priority: .userInitiated) { work() }.value
+    }
+
     private func run() async {
         isBusy = true
         defer { isBusy = false }
@@ -187,18 +211,24 @@ public final class GameController {
                     }
                     return
                 }
-                await pause(pace.aiThink)
-                guard !Task.isCancelled else { return }
                 let view = game.view(for: seat)
-                let bid: Bid = view.canBidBlindNil && ai.wantsBlindNil(view) ? .blindNil : ai.chooseBid(view)
+                let player = ai(for: seat)
+                async let decision = think { view.canBidBlindNil && player.wantsBlindNil(view) ? Bid.blindNil : player.chooseBid(view) }
+                await pause(pace.aiThink)
+                let bid = await decision
+                guard !Task.isCancelled else { return }
                 try? game.placeBid(bid, for: seat)
                 if game.phase == .playing { humanHandRevealed = true }
             case .playing:
                 let seat = game.turn
                 if seat == human { return }
+                let view = game.view(for: seat)
+                let player = ai(for: seat)
+                async let decision = think { player.choosePlay(view) }
                 await pause(pace.aiThink)
+                let card = await decision
                 guard !Task.isCancelled else { return }
-                await perform(ai.choosePlay(game.view(for: seat)), by: seat)
+                await perform(card, by: seat)
             default:
                 return
             }
