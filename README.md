@@ -58,7 +58,7 @@ Pick **Easy**, **Medium**, or **Hard** on the home screen. Your partner always p
 
 No AI ever sees hidden cards. Every bot works from a `PlayerView` with only its own hand and what's public at the table, and Hard's imagined deals are built from that alone.
 
-Measured on identical, seat-swapped deals: Medium beats Easy in about 88% of games, and Hard beats Medium's best tuning in about 78% (+14 points per hand). Re-run the measurements with:
+Measured on identical, seat-swapped deals: Medium beats Easy in about 88% of games, and Hard beats the best non-simulating bot (a mistake-free Medium) in about 78% (+14 points per hand). Re-run the measurements with:
 
 ```sh
 SPADES_TUNE=1 SPADES_GAMES=30 swift test -c release -Xswiftc -enable-testing --filter AIStrengthTests
